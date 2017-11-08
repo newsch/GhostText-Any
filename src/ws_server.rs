@@ -1,3 +1,6 @@
+use std::thread::sleep;
+use std::time::Duration;
+
 use websocket;
 use websocket::{Message, OwnedMessage};
 use serde_json;
@@ -28,4 +31,7 @@ pub fn ws_thread<S: websocket::stream::Stream>(mut client: websocket::client::sy
 
     info!("Closing connection");
     client.send_message(&Message::close()).unwrap();
+
+    debug!("Waiting a bit to not disconnect on client");
+    sleep(Duration::from_secs(5));
 }
