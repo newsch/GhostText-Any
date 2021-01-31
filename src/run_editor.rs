@@ -4,10 +4,27 @@ use std::process::Command;
 
 use tempdir::TempDir;
 
-pub fn run(url: String, title: String, text: String) -> String {
-    let tempdir = TempDir::new("ghost-text").unwrap();
+fn process_title(title: &String) -> String {
+    const BAD_CHARS: &[char] = &['/','\\'];
 
-    let file_path = tempdir.path().join("buffer.txt");
+    let file_name = if title.is_empty() {
+        String::from("buffer")
+    } else {
+        title.replace(BAD_CHARS, "-")
+    } + ".txt";
+
+    file_name
+}
+
+pub fn run(url: String, title: String, text: String) -> String {
+    debug!("New edit {:?} for: {}", title, url);
+    let tempdir = TempDir::new("ghost-text").unwrap();
+    // TODO: watch for edits to file and change then, overwrite file on incoming edits
+
+    let file_name = process_title(&title);
+    let file_path = tempdir.path().join(file_name);
+
+    info!("New edit at: {:?}", file_path);
     {
         let mut file = fs::File::create(&file_path).unwrap();
         file.write_all(text.as_bytes()).unwrap();
