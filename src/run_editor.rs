@@ -15,9 +15,9 @@ pub fn run(url: String, title: String, text: String) -> String {
     }
 
     debug!("Opening editor for {:?}", file_path);
-    Command::new("nvim-qt")
-        .arg("--nofork")
-        .arg("--")
+    Command::new("x-terminal-emulator")
+        .arg("-e")
+        .arg("kak")
         .arg(&file_path)
         .env("GHOST_TEXT_URL", &url)
         .env("GHOST_TEXT_TITLE", &title)
