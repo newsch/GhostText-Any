@@ -1,4 +1,4 @@
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, Clone, Copy)]
 #[allow(non_snake_case)]
 pub struct RedirectToWebSocket {
     pub WebSocketPort: u16,

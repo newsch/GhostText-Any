@@ -1,4 +1,4 @@
-#[derive(StructOpt)]
+#[derive(StructOpt, Clone, Debug)]
 pub struct Options {
     #[structopt(
         short = "p",

@@ -1,18 +1,18 @@
 [package]
 authors = ["IdanArye <idanarye@gmail.com>"]
+edition = "2018"
 name = "ghost-text-file"
 version = "0.1.0"
 
 [dependencies]
-actix = "0.10.0"
 env_logger = "0.4.3"
-hyper = "0.10.6"
+futures = "0.3.12"
 log = "0.3.8"
-notify = "4.0.2"
 serde = "1.0.17"
 serde_derive = "1.0.18"
 serde_json = "1.0.5"
 structopt = "0.1.5"
 structopt-derive = "0.1.5"
 tempdir = "0.3.5"
-websocket = "0.26.2"
+tokio = {version = "1.1.1", features = ["macros", "rt-multi-thread", "fs", "process"]}
+warp = "0.3.0"

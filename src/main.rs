@@ -1,14 +1,13 @@
-extern crate env_logger;
-extern crate structopt;
-
-extern crate ghost_text_file;
-
+use std::error::Error;
 use structopt::StructOpt;
 
-fn main() {
-    env_logger::init().unwrap();
+#[tokio::main]
+async fn main() -> Result<(), Box<dyn Error>> {
+    env_logger::init()?;
 
-    let options = ghost_text_file::options::Options::from_args();
+    let options = ghost_text_file::Options::from_args();
 
-    ghost_text_file::http_server::launch_server(options);
+    ghost_text_file::server::run(options).await?;
+
+    Ok(())
 }
