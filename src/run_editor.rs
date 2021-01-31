@@ -1,11 +1,11 @@
-use std::io::prelude::*;
 use std::fs;
+use std::io::prelude::*;
 use std::process::Command;
 
 use tempdir::TempDir;
 
 fn process_title(title: &String) -> String {
-    const BAD_CHARS: &[char] = &['/','\\'];
+    const BAD_CHARS: &[char] = &['/', '\\'];
 
     let file_name = if title.is_empty() {
         String::from("buffer")
@@ -38,7 +38,10 @@ pub fn run(url: String, title: String, text: String) -> String {
         .arg(&file_path)
         .env("GHOST_TEXT_URL", &url)
         .env("GHOST_TEXT_TITLE", &title)
-        .spawn().unwrap().wait().unwrap();
+        .spawn()
+        .unwrap()
+        .wait()
+        .unwrap();
 
     {
         let mut file = fs::File::open(&file_path).unwrap();
