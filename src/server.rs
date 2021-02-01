@@ -113,12 +113,19 @@ async fn handle_websocket(options: State, stream: WebSocket) -> Result<(), Box<d
     Ok(())
 }
 
-fn process_title(title: &String) -> String {
-    const BAD_CHARS: &[char] = &['/', '\\'];
+fn process_title(title: &str) -> String {
+    const BAD_CHARS: &[char] = &[' ', '/', '\\', '\r', '\n', '\t'];
+
+    let mut title = title;
 
     let file_name = if title.is_empty() {
         String::from("buffer")
     } else {
+        if title.len() > 16 {
+            if let Some((i, _c)) = title.char_indices().nth(16) {
+                title = &title[..i];
+            }
+        }
         title.replace(BAD_CHARS, "-")
     } + ".txt";
 
