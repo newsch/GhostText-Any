@@ -5,9 +5,10 @@ use std::{
     path::{Path, PathBuf},
 };
 
+use inotify::{Inotify, WatchMask};
 use tokio::{fs, io, process::Command};
 
-use futures::{pin_mut, stream::SplitSink, FutureExt, SinkExt, StreamExt};
+use futures::{pin_mut, stream::SplitSink, FutureExt, SinkExt, Stream, StreamExt};
 use tempdir::TempDir;
 use warp::{
     ws::{Message, WebSocket},
@@ -91,7 +92,8 @@ async fn handle_websocket(options: State, stream: WebSocket) -> Result<(), Box<d
 
     let rx = rx.fuse();
     let editor = spawn_editor(&options, &file_path, &init_message).fuse();
-    pin_mut!(rx, editor);
+    let edits = watch_file_edits(&file_path)?.fuse();
+    pin_mut!(rx, editor, edits);
 
     loop {
         futures::select! {
@@ -101,6 +103,13 @@ async fn handle_websocket(options: State, stream: WebSocket) -> Result<(), Box<d
             }
                 debug!("Editor closed!");
                 break;
+            },
+            event = edits.select_next_some() => match event {
+                Ok(_) => {
+                    debug!("File modified");
+                    send_current_file_contents(&mut tx, &file_path).await?;
+                },
+                Err(e) => error!("inotify error: {}", e)
             },
             ws = rx.select_next_some() => info!("New websocket msg: {:?}", ws),
         }
@@ -152,10 +161,10 @@ async fn spawn_editor(
     options: &Options,
     file_path: &PathBuf,
     msg: &msg::GetTextFromComponent,
-) -> Result<(), Box<dyn Error>> {
-    let pieces = shell_words::split(&options.editor)?;
+) -> Result<(), io::Error> {
+    let pieces = shell_words::split(&options.editor).unwrap();
 
-    let program = pieces.get(0).ok_or("Empty editor")?;
+    let program = pieces.get(0).ok_or("Empty editor").unwrap();
     let args = &pieces[1..];
 
     debug!("Opening editor {:?} for {:?}", pieces, file_path);
@@ -175,16 +184,25 @@ async fn spawn_editor(
     Ok(())
 }
 
-// /// Returns a stream of update events
-// async fn watch_file_edits(path: PathBuf) -> impl Stream<Item = ()> {
-//     todo!()
-// }
+/// Returns a stream of update events
+fn watch_file_edits(path: &PathBuf) -> io::Result<impl Stream<Item = Result<(), io::Error>>> {
+    let mut watcher = Inotify::init()?;
+    watcher.add_watch(path, WatchMask::MODIFY)?;
+    let buffer = [0u8; 32];
+    let stream = watcher.event_stream(buffer)?.map(|op| {
+        op.map(|event| {
+            trace!("inotify event: {:?}", event);
+            ()
+        })
+    });
+    Ok(stream)
+}
 
 async fn send_current_file_contents(
     stream: &mut WebSocketTx,
     file_path: &PathBuf,
-) -> Result<(), Box<dyn Error>> {
-    let text = current_file_contents(file_path).await?;
+) -> Result<(), warp::Error> {
+    let text = current_file_contents(file_path).await.unwrap();
 
     stream
         .send(Message::text(
