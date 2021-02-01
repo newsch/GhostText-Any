@@ -1,4 +1,9 @@
-use std::{error::Error, fs::File, io::Write, path::{Path, PathBuf}};
+use std::{
+    error::Error,
+    fs::File,
+    io::Write,
+    path::{Path, PathBuf},
+};
 
 use tokio::{fs, io, process::Command};
 
@@ -84,8 +89,8 @@ async fn handle_websocket(options: State, stream: WebSocket) -> Result<(), Box<d
     //   - ignore cursor updates
     //   - respond to pings?
 
-    let mut rx = rx.fuse();
-    let editor = spawn_editor(&file_path, &init_message).fuse();
+    let rx = rx.fuse();
+    let editor = spawn_editor(&options, &file_path, &init_message).fuse();
     pin_mut!(rx, editor);
 
     loop {
@@ -136,11 +141,19 @@ fn init_file(path: &PathBuf, msg: &msg::GetTextFromComponent) -> io::Result<()> 
 }
 
 /// Returns on process exit
-async fn spawn_editor(file_path: &PathBuf, msg: &msg::GetTextFromComponent) -> io::Result<()> {
-    debug!("Opening editor for {:?}", file_path);
-    let exit_status = Command::new("x-terminal-emulator")
-        .arg("-e")
-        .arg("kak")
+async fn spawn_editor(
+    options: &Options,
+    file_path: &PathBuf,
+    msg: &msg::GetTextFromComponent,
+) -> Result<(), Box<dyn Error>> {
+    let pieces = shell_words::split(&options.editor)?;
+
+    let program = pieces.get(0).ok_or("Empty editor")?;
+    let args = &pieces[1..];
+
+    debug!("Opening editor {:?} for {:?}", pieces, file_path);
+    let exit_status = Command::new(program)
+        .args(args)
         .arg(file_path)
         .env("GHOST_TEXT_URL", &msg.url)
         .env("GHOST_TEXT_TITLE", &msg.title)

@@ -1,10 +1,8 @@
 #[derive(StructOpt, Clone, Debug)]
 pub struct Options {
-    #[structopt(
-        short = "p",
-        long = "port",
-        help = "The port to listen to",
-        default_value = "4001"
-    )]
+    /// Port to listen on
+    #[structopt(short, long, default_value = "4001")]
     pub port: u16,
+    #[structopt(short, long, env)]
+    pub editor: String,
 }
