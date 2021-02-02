@@ -2,6 +2,7 @@ use std::{
     error::Error,
     fs::File,
     io::Write,
+    net::SocketAddr,
     path::{Path, PathBuf},
     sync::Arc,
 };
@@ -59,9 +60,9 @@ pub async fn run(options: Options) -> Result<(), Box<dyn Error>> {
     // since websocket filter is more restrictive match on it first
     let routes = ws_route.or(index);
 
-    warp::serve(routes)
-        .run(([127, 0, 0, 1], options.port))
-        .await;
+    let addr: SocketAddr = ([127, 0, 0, 1], options.port).into();
+    info!("Listening on: http://{}", addr);
+    warp::serve(routes).run(addr).await;
 
     Ok(())
 }
@@ -213,6 +214,7 @@ async fn spawn_editor(
     file_path: &PathBuf,
     msg: &msg::GetTextFromComponent,
 ) -> Result<(), io::Error> {
+    info!("New session from: {:?}", msg.title);
     let pieces = shell_words::split(&options.editor).unwrap();
 
     let program = pieces.get(0).ok_or("Empty editor").unwrap();
