@@ -19,6 +19,7 @@ use crate::{ws_messages as msg, Options};
 
 type State = Options;
 type WebSocketTx = SplitSink<WebSocket, Message>;
+type Cursors = Vec<msg::RangeInText>;
 
 fn with_state(
     state: State,
@@ -76,6 +77,9 @@ async fn handle_websocket(options: State, stream: WebSocket) -> Result<(), Box<d
         panic!("Expect first msg to be text")
     };
 
+    // store client cursor changes and pass back and forth...
+    let mut cursors = init_message.selections.clone();
+
     // create file
     let tempdir = TempDir::new("ghost-text")?;
     let file_path = get_new_path(tempdir.path(), &init_message)?;
@@ -107,16 +111,32 @@ async fn handle_websocket(options: State, stream: WebSocket) -> Result<(), Box<d
             event = edits.select_next_some() => match event {
                 Ok(_) => {
                     debug!("File modified");
-                    send_current_file_contents(&mut tx, &file_path).await?;
+                    send_current_file_contents(&mut tx, &file_path, &cursors).await?;
                 },
                 Err(e) => error!("inotify error: {}", e)
             },
-            ws = rx.select_next_some() => info!("New websocket msg: {:?}", ws),
+            msg = rx.select_next_some() => match msg {
+                Ok(msg) => {
+                    if msg.is_text() {
+                        let update_msg: msg::GetTextFromComponent = serde_json::from_str(msg.to_str().unwrap()).unwrap();
+                        debug!("Received update msg");
+                        cursors = update_msg.selections.to_owned();
+                        init_file(&file_path, &update_msg)?;
+                        // take next edit notification...
+                        if let Err(e) = edits.select_next_some().await {
+                            error!("inotify error after writing: {}", e);
+                        }
+                        continue;
+                    }
+                    debug!("Received non-update msg: {:?}", msg);
+                },
+                Err(e) => error!("Websocket error: {}", e),
+        },
         }
     }
 
     // return updated file text
-    send_current_file_contents(&mut tx, &file_path).await?;
+    send_current_file_contents(&mut tx, &file_path, &cursors).await?;
 
     drop(tempdir); // delete directory/file
     Ok(())
@@ -201,6 +221,7 @@ fn watch_file_edits(path: &PathBuf) -> io::Result<impl Stream<Item = Result<(), 
 async fn send_current_file_contents(
     stream: &mut WebSocketTx,
     file_path: &PathBuf,
+    cursors: &Cursors,
 ) -> Result<(), warp::Error> {
     let text = current_file_contents(file_path).await.unwrap();
 
@@ -208,6 +229,7 @@ async fn send_current_file_contents(
         .send(Message::text(
             serde_json::to_string(&msg::SetTextInComponent {
                 text: text.as_ref(),
+                selections: cursors.to_owned(),
             })
             .unwrap(),
         ))

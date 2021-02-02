@@ -8,9 +8,10 @@ pub struct RedirectToWebSocket {
 #[derive(Debug, Serialize, Deserialize)]
 pub struct SetTextInComponent<'a> {
     pub text: &'a str,
+    pub selections: Vec<RangeInText>,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, Clone, Copy)]
 pub struct RangeInText {
     pub start: usize,
     pub end: usize,
