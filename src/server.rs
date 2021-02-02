@@ -3,10 +3,15 @@ use std::{
     fs::File,
     io::Write,
     path::{Path, PathBuf},
+    sync::Arc,
 };
 
 use inotify::{Inotify, WatchMask};
-use tokio::{fs, io, process::Command};
+use tokio::{
+    fs, io,
+    process::Command,
+    sync::Semaphore,
+};
 
 use futures::{pin_mut, stream::SplitSink, FutureExt, SinkExt, Stream, StreamExt};
 use tempdir::TempDir;
@@ -17,19 +22,29 @@ use warp::{
 
 use crate::{ws_messages as msg, Options};
 
-type State = Options;
 type WebSocketTx = SplitSink<WebSocket, Message>;
 type Cursors = Vec<msg::RangeInText>;
 
-fn with_state(
-    state: State,
-) -> impl Filter<Extract = (State,), Error = std::convert::Infallible> + Clone {
+#[derive(Debug, Clone)]
+struct State {
+    options: Options,
+    single_access: Arc<Semaphore>,
+}
+
+fn with_state<S: Clone + Send>(
+    state: S,
+) -> impl Filter<Extract = (S,), Error = std::convert::Infallible> + Clone {
     warp::any().map(move || state.clone())
 }
 
 pub async fn run(options: Options) -> Result<(), Box<dyn Error>> {
+    let state = State {
+        options: options.clone(),
+        single_access: Arc::new(Semaphore::new(1)),
+    };
+
     let ws_route = warp::path::end()
-        .and(with_state(options.clone()))
+        .and(with_state(state.clone()))
         // The `ws()` filter will prepare the Websocket handshake.
         .and(warp::ws())
         .map(|state, ws: warp::ws::Ws| {
@@ -65,7 +80,7 @@ fn redirect_to_websocket(options: Options) -> String {
 }
 
 /// Communicate over a websocket, manage an intermediate file, spawn an editor, watch for changes
-async fn handle_websocket(options: State, stream: WebSocket) -> Result<(), Box<dyn Error>> {
+async fn handle_websocket(state: State, stream: WebSocket) -> Result<(), Box<dyn Error>> {
     let (mut tx, mut rx) = stream.split();
 
     let init_message: Message = rx.next().await.expect("Need an initial edit message")?;
@@ -95,7 +110,7 @@ async fn handle_websocket(options: State, stream: WebSocket) -> Result<(), Box<d
     //   - respond to pings?
 
     let rx = rx.fuse();
-    let editor = spawn_editor(&options, &file_path, &init_message).fuse();
+    let editor = lock_and_spawn(&state, &file_path, &init_message).fuse();
     let edits = watch_file_edits(&file_path)?.fuse();
     pin_mut!(rx, editor, edits);
 
@@ -173,6 +188,26 @@ fn init_file(path: &PathBuf, msg: &msg::GetTextFromComponent) -> io::Result<()> 
     if !msg.text.ends_with('\n') {
         file.write(&['\n' as u8])?;
     }
+    Ok(())
+}
+
+/// If configured, acquire a global lock before starting the editor process
+async fn lock_and_spawn(
+    state: &State,
+    file_path: &PathBuf,
+    msg: &msg::GetTextFromComponent,
+) -> Result<(), io::Error> {
+    let lock = if !state.options.many {
+        Some(state.single_access.acquire().await.unwrap())
+    } else {
+        None
+    };
+
+    spawn_editor(&state.options, file_path, msg).await?;
+
+    // the editor has either failed or finished, so allow another process to spawn
+    drop(lock);
+
     Ok(())
 }
 
