@@ -7,11 +7,7 @@ use std::{
 };
 
 use inotify::{Inotify, WatchMask};
-use tokio::{
-    fs, io,
-    process::Command,
-    sync::Semaphore,
-};
+use tokio::{fs, io, process::Command, sync::Semaphore};
 
 use futures::{pin_mut, stream::SplitSink, FutureExt, SinkExt, Stream, StreamExt};
 use tempdir::TempDir;

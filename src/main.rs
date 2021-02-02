@@ -1,3 +1,16 @@
+#[macro_use]
+extern crate log;
+#[macro_use]
+extern crate serde_derive;
+#[macro_use]
+extern crate structopt;
+
+mod options;
+use options::Options;
+
+mod server;
+mod ws_messages;
+
 use std::error::Error;
 use structopt::StructOpt;
 
@@ -5,9 +18,9 @@ use structopt::StructOpt;
 async fn main() -> Result<(), Box<dyn Error>> {
     env_logger::init()?;
 
-    let options = ghost_text_file::Options::from_args();
+    let options = Options::from_args();
 
-    ghost_text_file::server::run(options).await?;
+    server::run(options).await?;
 
     Ok(())
 }

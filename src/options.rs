@@ -1,4 +1,5 @@
 #[derive(StructOpt, Clone, Debug)]
+#[structopt(about)]
 pub struct Options {
     /// Port to listen on
     #[structopt(short, long, default_value = "4001")]
