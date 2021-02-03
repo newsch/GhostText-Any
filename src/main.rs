@@ -13,11 +13,10 @@ use options::Options;
 mod server;
 mod ws_messages;
 
-use std::error::Error;
 use structopt::StructOpt;
 
 #[tokio::main]
-async fn main() -> Result<(), Box<dyn Error>> {
+async fn main() -> anyhow::Result<()> {
     env_logger::builder()
         .filter(Some("gtany"), LevelFilter::Info)
         .format_timestamp(None)

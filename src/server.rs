@@ -1,5 +1,4 @@
 use std::{
-    error::Error,
     fs::File,
     io::Write,
     net::SocketAddr,
@@ -7,6 +6,7 @@ use std::{
     sync::Arc,
 };
 
+use anyhow::{bail, Context};
 use inotify::{Inotify, WatchMask};
 use tokio::{fs, io, process::Command, sync::Semaphore};
 
@@ -34,7 +34,7 @@ fn with_state<S: Clone + Send>(
     warp::any().map(move || state.clone())
 }
 
-pub async fn run(options: Options) -> Result<(), Box<dyn Error>> {
+pub async fn run(options: Options) -> anyhow::Result<()> {
     let state = State {
         options: options.clone(),
         single_access: Arc::new(Semaphore::new(1)),
@@ -49,7 +49,7 @@ pub async fn run(options: Options) -> Result<(), Box<dyn Error>> {
             ws.on_upgrade(|websocket| async {
                 handle_websocket(state, websocket)
                     .await
-                    .unwrap_or_else(|e| error!("Error handling websocket: {}", e))
+                    .unwrap_or_else(|e| error!("Error handling websocket: {:?}", e))
             })
         });
 
@@ -77,16 +77,17 @@ fn redirect_to_websocket(options: Options) -> String {
 }
 
 /// Communicate over a websocket, manage an intermediate file, spawn an editor, watch for changes
-async fn handle_websocket(state: State, stream: WebSocket) -> Result<(), Box<dyn Error>> {
+async fn handle_websocket(state: State, stream: WebSocket) -> anyhow::Result<()> {
     let (mut tx, mut rx) = stream.split();
 
     let init_message: Message = rx.next().await.expect("Need an initial edit message")?;
 
     debug!("First message: {:?}", init_message);
     let init_message: msg::GetTextFromComponent = if init_message.is_text() {
-        serde_json::from_str(init_message.to_str().unwrap()).unwrap()
+        serde_json::from_str(init_message.to_str().expect("Is a text msg"))
+            .context("Couldn't parse initial websocket message")?
     } else {
-        panic!("Expect first msg to be text")
+        bail!("Initial websocket message not text")
     };
 
     // store client cursor changes and pass back and forth...
@@ -130,7 +131,7 @@ async fn handle_websocket(state: State, stream: WebSocket) -> Result<(), Box<dyn
             msg = rx.select_next_some() => match msg {
                 Ok(msg) => {
                     if msg.is_text() {
-                        let update_msg: msg::GetTextFromComponent = serde_json::from_str(msg.to_str().unwrap()).unwrap();
+                        let update_msg: msg::GetTextFromComponent = serde_json::from_str(msg.to_str().expect("Is a text msg")).context("Could not parse websocket message")?;
                         debug!("Received update msg");
                         cursors = update_msg.selections.to_owned();
                         init_file(&file_path, &update_msg)?;
@@ -193,9 +194,9 @@ async fn lock_and_spawn(
     state: &State,
     file_path: &PathBuf,
     msg: &msg::GetTextFromComponent,
-) -> Result<(), io::Error> {
+) -> anyhow::Result<()> {
     let lock = if !state.options.many {
-        Some(state.single_access.acquire().await.unwrap())
+        Some(state.single_access.acquire().await?)
     } else {
         None
     };
@@ -213,11 +214,11 @@ async fn spawn_editor(
     options: &Options,
     file_path: &PathBuf,
     msg: &msg::GetTextFromComponent,
-) -> Result<(), io::Error> {
+) -> anyhow::Result<()> {
     info!("New session from: {:?}", msg.title);
-    let pieces = shell_words::split(&options.editor).unwrap();
+    let pieces = shell_words::split(&options.editor).context("Could not parse editor command")?;
 
-    let program = pieces.get(0).ok_or("Empty editor").unwrap();
+    let program = pieces.get(0).context("Empty editor command")?;
     let args = &pieces[1..];
 
     debug!("Opening editor {:?} for {:?}", pieces, file_path);
@@ -237,7 +238,7 @@ async fn spawn_editor(
     Ok(())
 }
 
-/// Returns a stream of update events
+/// Returns a stream of update events for the provided file
 fn watch_file_edits(path: &PathBuf) -> io::Result<impl Stream<Item = Result<(), io::Error>>> {
     let mut watcher = Inotify::init()?;
     watcher.add_watch(path, WatchMask::MODIFY)?;
@@ -255,17 +256,16 @@ async fn send_current_file_contents(
     stream: &mut WebSocketTx,
     file_path: &PathBuf,
     cursors: &Cursors,
-) -> Result<(), warp::Error> {
-    let text = current_file_contents(file_path).await.unwrap();
+) -> anyhow::Result<()> {
+    let text = current_file_contents(file_path).await?;
 
     stream
-        .send(Message::text(
-            serde_json::to_string(&msg::SetTextInComponent {
+        .send(Message::text(serde_json::to_string(
+            &msg::SetTextInComponent {
                 text: text.as_ref(),
                 selections: cursors.to_owned(),
-            })
-            .unwrap(),
-        ))
+            },
+        )?))
         .await?;
 
     Ok(())
