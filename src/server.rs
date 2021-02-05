@@ -20,7 +20,6 @@ use warp::{
 use crate::{ws_messages as msg, Options};
 
 type WebSocketTx = SplitSink<WebSocket, Message>;
-type Cursors = Vec<msg::RangeInText>;
 
 #[derive(Debug, Clone)]
 struct State {
@@ -184,7 +183,7 @@ fn init_file(path: &PathBuf, msg: &msg::GetTextFromComponent) -> io::Result<()> 
     let mut file = File::create(path)?;
     file.write_all(msg.text.as_bytes())?;
     if !msg.text.ends_with('\n') {
-        file.write(&['\n' as u8])?;
+        file.write_all(&[b'\n'])?;
     }
     Ok(())
 }
@@ -246,7 +245,6 @@ fn watch_file_edits(path: &PathBuf) -> io::Result<impl Stream<Item = Result<(), 
     let stream = watcher.event_stream(buffer)?.map(|op| {
         op.map(|event| {
             trace!("inotify event: {:?}", event);
-            ()
         })
     });
     Ok(stream)
@@ -255,7 +253,7 @@ fn watch_file_edits(path: &PathBuf) -> io::Result<impl Stream<Item = Result<(), 
 async fn send_current_file_contents(
     stream: &mut WebSocketTx,
     file_path: &PathBuf,
-    cursors: &Cursors,
+    cursors: &[msg::RangeInText],
 ) -> anyhow::Result<()> {
     let text = current_file_contents(file_path).await?;
 
@@ -274,7 +272,7 @@ async fn send_current_file_contents(
 async fn current_file_contents(file_path: &PathBuf) -> io::Result<String> {
     let mut text = fs::read_to_string(file_path).await?;
 
-    if text.ends_with("\n") {
+    if text.ends_with('\n') {
         text.pop();
     }
 
