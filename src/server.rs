@@ -1,7 +1,7 @@
 use std::{
     fs::File,
     io::Write,
-    net::SocketAddr,
+    net::ToSocketAddrs,
     path::{Path, PathBuf},
     sync::Arc,
 };
@@ -59,8 +59,13 @@ pub async fn run(options: Options) -> anyhow::Result<()> {
     // since websocket filter is more restrictive match on it first
     let routes = ws_route.or(index);
 
-    let addr: SocketAddr = ([127, 0, 0, 1], options.port).into();
-    info!("Listening on: http://{}", addr);
+    let requested_addr = format!("{}:{}", options.host, options.port);
+
+    let mut addrs = (options.host, options.port)
+        .to_socket_addrs()
+        .with_context(|| format!("Invalid server address: {}", requested_addr))?;
+    let addr = addrs.next().unwrap();
+    info!("Listening on http://{}", addr);
     warp::serve(routes).run(addr).await;
 
     Ok(())
@@ -194,7 +199,7 @@ async fn lock_and_spawn(
     file_path: &PathBuf,
     msg: &msg::GetTextFromComponent,
 ) -> anyhow::Result<()> {
-    let lock = if !state.options.many {
+    let lock = if !state.options.multi {
         Some(state.single_access.acquire().await?)
     } else {
         None
