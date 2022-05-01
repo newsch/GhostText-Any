@@ -8,7 +8,13 @@ use std::{
 
 use anyhow::{bail, Context};
 use inotify::{Inotify, WatchMask};
-use tokio::{fs, io, process::Command, sync::Semaphore};
+use tokio::{
+    fs, io,
+    process::Command,
+    sync::{mpsc, Semaphore},
+    time,
+};
+use tokio_stream::wrappers::UnboundedReceiverStream;
 
 use futures::{pin_mut, stream::SplitSink, FutureExt, SinkExt, Stream, StreamExt};
 use tempdir::TempDir;
@@ -39,16 +45,32 @@ pub async fn run(options: Options) -> anyhow::Result<()> {
         single_access: Arc::new(Semaphore::new(1)),
     };
 
+    let (thread_update_snd, thread_update_rec) = mpsc::unbounded_channel::<ThreadStatus>();
+
     let ws_route = warp::path::end()
         .and(with_state(state.clone()))
         // The `ws()` filter will prepare the Websocket handshake.
         .and(warp::ws())
-        .map(|state, ws: warp::ws::Ws| {
+        .map(move |state: State, ws: warp::ws::Ws| {
             // And then our closure will be called when it completes...
-            ws.on_upgrade(|websocket| async {
+            let thread_update_snd = thread_update_snd.clone();
+            ws.on_upgrade(|websocket| async move {
+                let use_timeout = state.options.idle_timeout.is_some();
+                if use_timeout {
+                    thread_update_snd
+                        .send(ThreadStatus::Started)
+                        .unwrap_or_else(|e| error!("Cannot send to thread update channel: {}", e));
+                }
+
                 handle_websocket(state, websocket)
                     .await
-                    .unwrap_or_else(|e| error!("Error handling websocket: {:?}", e))
+                    .unwrap_or_else(|e| error!("Error handling websocket: {:?}", e));
+
+                if use_timeout {
+                    thread_update_snd
+                        .send(ThreadStatus::Finished)
+                        .unwrap_or_else(|e| error!("Cannot send to thread update channel: {}", e));
+                }
             })
         });
 
@@ -66,7 +88,14 @@ pub async fn run(options: Options) -> anyhow::Result<()> {
         .with_context(|| format!("Invalid server address: {}", requested_addr))?;
     let addr = addrs.next().unwrap();
     info!("Listening on http://{}", addr);
-    warp::serve(routes).run(addr).await;
+
+    if let Some(timeout_sec) = options.idle_timeout {
+        let timeout_task = idle_timeout(time::Duration::from_secs(timeout_sec), thread_update_rec);
+        let (_addr, server) = warp::serve(routes).bind_with_graceful_shutdown(addr, timeout_task);
+        server.await;
+    } else {
+        warp::serve(routes).bind(addr).await;
+    }
 
     Ok(())
 }
@@ -282,4 +311,42 @@ async fn current_file_contents(file_path: &PathBuf) -> io::Result<String> {
     }
 
     Ok(text)
+}
+
+enum ThreadStatus {
+    Started,
+    Finished,
+}
+
+async fn idle_timeout(
+    duration: time::Duration,
+    status_updater: mpsc::UnboundedReceiver<ThreadStatus>,
+) {
+    let mut alive_count: usize = 0;
+    let mut updater = UnboundedReceiverStream::new(status_updater);
+
+    loop {
+        let update = if alive_count == 0 {
+            time::timeout(duration, updater.next()).await
+        } else {
+            Ok(updater.next().await)
+        };
+
+        match update {
+            Err(_) /* time::error::Elapsed, compiler doesn't like writing it inside the match arm */ => {
+                info!("Stopping after idle timeout of {} secs", duration.as_secs());
+                break;
+            }
+            Ok(None) => {
+                error!("All thread status sending handles dropped; stopping");
+                break;
+            }
+            Ok(Some(ThreadStatus::Started)) => {
+                alive_count += 1;
+            }
+            Ok(Some(ThreadStatus::Finished)) => {
+                alive_count -= 1;
+            }
+        }
+    }
 }

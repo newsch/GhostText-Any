@@ -16,4 +16,7 @@ pub struct Options {
     /// Allow multiple concurrent instances of editing command
     #[structopt(short, long)]
     pub multi: bool,
+    /// Shutdown after <SECONDS> with no connections
+    #[structopt(short, long, name = "SECONDS")]
+    pub idle_timeout: Option<u64>,
 }
