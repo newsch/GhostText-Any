@@ -18,9 +18,10 @@ use structopt::StructOpt;
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     env_logger::builder()
-        .filter(Some("gtany"), LevelFilter::Info)
+        .filter_level(LevelFilter::Info)
         .format_timestamp(None)
         .format_module_path(false)
+        .parse_default_env()
         .try_init()?;
 
     let options = Options::from_args();

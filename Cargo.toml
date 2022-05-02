@@ -26,5 +26,5 @@ shell-words = "1.0.0"
 structopt = "0.3.21"
 tempdir = "0.3.7"
 tokio = { version = "1.2.0", features = ["macros", "rt-multi-thread", "fs", "process", "time"] }
-tokio-stream = "0.1.8"
+tokio-stream = { version = "0.1.8", features = ["net"] }
 warp = "0.3.0"

@@ -1,7 +1,9 @@
 use std::{
+    env,
     fs::File,
     io::Write,
     net::ToSocketAddrs,
+    os::unix,
     path::{Path, PathBuf},
     sync::Arc,
 };
@@ -9,12 +11,12 @@ use std::{
 use anyhow::{bail, Context};
 use inotify::{Inotify, WatchMask};
 use tokio::{
-    fs, io,
+    fs, io, net,
     process::Command,
     sync::{mpsc, Semaphore},
     time,
 };
-use tokio_stream::wrappers::UnboundedReceiverStream;
+use tokio_stream::wrappers::{UnboundedReceiverStream, UnixListenerStream};
 
 use futures::{pin_mut, stream::SplitSink, FutureExt, SinkExt, Stream, StreamExt};
 use tempdir::TempDir;
@@ -87,14 +89,31 @@ pub async fn run(options: Options) -> anyhow::Result<()> {
         .to_socket_addrs()
         .with_context(|| format!("Invalid server address: {}", requested_addr))?;
     let addr = addrs.next().unwrap();
-    info!("Listening on http://{}", addr);
+
+    let server = warp::serve(routes);
 
     if let Some(timeout_sec) = options.idle_timeout {
+        debug!("Idle timeout after {} secs", timeout_sec);
         let timeout_task = idle_timeout(time::Duration::from_secs(timeout_sec), thread_update_rec);
-        let (_addr, server) = warp::serve(routes).bind_with_graceful_shutdown(addr, timeout_task);
-        server.await;
+
+        if options.from_systemd {
+            let listener_stream = systemd_socket()?;
+            info!("Listening on systemd socket");
+            server
+                .serve_incoming_with_graceful_shutdown(listener_stream, timeout_task)
+                .await;
+        } else {
+            info!("Listening on http://{}", addr);
+            let (_addr, serve_task) = server.bind_with_graceful_shutdown(addr, timeout_task);
+            serve_task.await;
+        }
+    } else if options.from_systemd {
+        let listener_stream = systemd_socket()?;
+        info!("Listening on systemd socket");
+        server.serve_incoming(listener_stream).await;
     } else {
-        warp::serve(routes).bind(addr).await;
+        info!("Listening on http://{}", addr);
+        server.bind(addr).await;
     }
 
     Ok(())
@@ -349,4 +368,45 @@ async fn idle_timeout(
             }
         }
     }
+}
+
+/// Try to get a listener socket passed by systemd.
+///
+/// This function should only be called once.
+fn systemd_socket() -> anyhow::Result<UnixListenerStream> {
+    const START_FD: usize = 3; // SD_LISTEN_FDS_START, see sd_listen_fds(3)
+    const LISTEN_PID: &str = "LISTEN_PID";
+    const LISTEN_FD_NAMES: &str = "LISTEN_FD_NAMES";
+    const LISTEN_FDS: &str = "LISTEN_FDS";
+
+    debug!("LISTEN_PID={:?}", env::var_os(LISTEN_PID));
+    debug!("LISTEN_FD_NAMES={:?}", env::var_os(LISTEN_FD_NAMES));
+    debug!("LISTEN_FDS={:?}", env::var_os(LISTEN_FDS));
+
+    let num_fds: usize = env::var(LISTEN_FDS)?.parse()?;
+    if num_fds > 1 {
+        anyhow::bail!("More than one systemd socket file descriptor present");
+    } else if num_fds == 0 {
+        anyhow::bail!("No systemd socket file descriptors present");
+    }
+
+    // only one socket
+    let fd = START_FD as unix::io::RawFd;
+
+    // turn fd into std UnixListener
+    // Safety: only called once, environment variables are removed to prevent reuse
+    use unix::io::FromRawFd;
+    let listener = unsafe { unix::net::UnixListener::from_raw_fd(fd) };
+    listener.set_nonblocking(true)?;
+
+    // convert to tokio UnixListenerStream
+    let listener = net::UnixListener::from_std(listener)?;
+    let listener_stream = UnixListenerStream::new(listener);
+
+    // Remove environment variables to prevent reuse
+    env::remove_var(LISTEN_PID);
+    env::remove_var(LISTEN_FD_NAMES);
+    env::remove_var(LISTEN_FDS);
+
+    Ok(listener_stream)
 }

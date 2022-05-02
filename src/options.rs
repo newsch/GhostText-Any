@@ -19,4 +19,14 @@ pub struct Options {
     /// Shutdown after <SECONDS> with no connections
     #[structopt(short, long, name = "SECONDS")]
     pub idle_timeout: Option<u64>,
+    /// Serve on a listening socket passed by systemd
+    ///
+    /// If the socket cannot be found or used a failure will be returned.
+    /// The `--port` flag must match what systemd is listening on in order to
+    /// send a correct ghosttext websocket redirect message.
+    /// This expects a socket configured with `Accept=no` and
+    /// `ListenStream=<PORT>`.
+    /// See `systemd.socket(5)`, `sd_listen_fds(3)`.
+    #[structopt(long)]
+    pub from_systemd: bool,
 }
