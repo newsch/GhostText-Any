@@ -1,3 +1,7 @@
+//! Types for GhostText protocol websocket messages
+//!
+//! See <https://github.com/fregante/GhostText/blob/d5273b134f88a96dd3a20bfeb09049bdbc5f8b70/PROTOCOL.md>
+
 #[derive(Debug, Serialize, Deserialize, Clone, Copy)]
 #[allow(non_snake_case)]
 pub struct RedirectToWebSocket {

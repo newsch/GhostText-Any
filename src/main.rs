@@ -6,14 +6,11 @@ use log::LevelFilter;
 extern crate serde_derive;
 #[macro_use]
 extern crate structopt;
+use structopt::StructOpt;
 
 mod options;
 use options::Options;
-
 mod server;
-mod ws_messages;
-
-use structopt::StructOpt;
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
