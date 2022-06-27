@@ -18,7 +18,7 @@ pub fn get_new_path(dir: &Path, msg: &msg::GetTextFromComponent) -> io::Result<P
     Ok(file_path)
 }
 
-pub fn replace_contents(path: &PathBuf, msg: &msg::GetTextFromComponent) -> io::Result<()> {
+pub fn replace_contents(path: &Path, msg: &msg::GetTextFromComponent) -> io::Result<()> {
     let mut file = File::create(path)?;
     file.write_all(msg.text.as_bytes())?;
     if !msg.text.ends_with('\n') {
@@ -28,7 +28,7 @@ pub fn replace_contents(path: &PathBuf, msg: &msg::GetTextFromComponent) -> io::
 }
 
 /// Returns a stream of update events for the provided file
-pub fn watch_edits(path: &PathBuf) -> io::Result<impl Stream<Item = Result<(), io::Error>>> {
+pub fn watch_edits(path: &Path) -> io::Result<impl Stream<Item = Result<(), io::Error>>> {
     let mut watcher = Inotify::init()?;
     watcher.add_watch(path, WatchMask::MODIFY)?;
     let buffer = [0u8; 32];
@@ -40,7 +40,7 @@ pub fn watch_edits(path: &PathBuf) -> io::Result<impl Stream<Item = Result<(), i
     Ok(stream)
 }
 
-pub async fn get_current_contents(file_path: &PathBuf) -> io::Result<String> {
+pub async fn get_current_contents(file_path: &Path) -> io::Result<String> {
     let mut text = fs::read_to_string(file_path).await?;
 
     if text.ends_with('\n') {

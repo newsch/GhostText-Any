@@ -1,4 +1,4 @@
-use std::path::PathBuf;
+use std::path::Path;
 
 use anyhow::bail;
 use anyhow::Context;
@@ -12,7 +12,7 @@ use super::Settings;
 /// Returns on process exit
 pub async fn spawn_editor(
     options: &Settings,
-    file_path: &PathBuf,
+    file_path: &Path,
     msg: &msg::GetTextFromComponent,
 ) -> anyhow::Result<()> {
     info!("New session from: {:?}", msg.title);
@@ -34,7 +34,7 @@ pub async fn spawn_editor(
     for s in pieces.iter_mut().skip(1) {
         replace_in_place(s, "%l", &line.to_string());
         replace_in_place(s, "%c", &col.to_string());
-        if replace_in_place(s, "%f", &file_path) {
+        if replace_in_place(s, "%f", file_path) {
             did_replace_file = true;
         }
     }
@@ -75,5 +75,5 @@ fn replace_in_place(source: &mut String, pattern: &str, replacement: &str) -> bo
     };
 
     source.replace_range(start..(start + pattern.len()), replacement);
-    return true;
+    true
 }

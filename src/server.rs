@@ -1,4 +1,4 @@
-use std::{net::ToSocketAddrs, path::PathBuf, sync::Arc};
+use std::{net::ToSocketAddrs, path::Path, sync::Arc};
 
 use anyhow::{bail, Context};
 use tokio::{
@@ -207,7 +207,7 @@ async fn handle_websocket(state: State, stream: WebSocket) -> anyhow::Result<()>
 /// Acquire a global lock if configured and start the editor process
 async fn lock_and_spawn(
     state: &State,
-    file_path: &PathBuf,
+    file_path: &Path,
     msg: &msg::GetTextFromComponent,
 ) -> anyhow::Result<()> {
     let lock = if !state.options.multi {
@@ -226,7 +226,7 @@ async fn lock_and_spawn(
 
 async fn send_current_file_contents(
     stream: &mut WebSocketTx,
-    file_path: &PathBuf,
+    file_path: &Path,
     cursors: &[msg::RangeInText],
 ) -> anyhow::Result<()> {
     let text = file::get_current_contents(file_path).await?;
