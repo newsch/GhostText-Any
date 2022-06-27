@@ -9,8 +9,15 @@ pub struct Options {
     pub host: String,
     /// Command to run with the received file
     ///
+    /// Defaults to the value of $EDITOR.
+    ///
     /// Once the command completes, the contents of the file will be sent to the
     /// browser, the connection closed, and the file deleted.
+    ///
+    /// If %f is present in the command, it will be replaced with the filename,
+    /// otherwise the filename will be appended to the command.
+    /// If %l or %c are present in the command, they will be replaced with the
+    /// line and column, respectively, of the browser's cursor.
     #[structopt(short, long, env)]
     pub editor: String,
     /// Allow multiple concurrent instances of editing command

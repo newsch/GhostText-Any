@@ -28,3 +28,9 @@ tempdir = "0.3.7"
 tokio = { version = "1.2.0", features = ["macros", "rt-multi-thread", "fs", "process", "time"] }
 tokio-stream = { version = "0.1.8", features = ["net"] }
 warp = "0.3.0"
+
+[dev-dependencies]
+test-case = "2.1.0"
+test-log = "0.2.8"
+
+[features]

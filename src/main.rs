@@ -17,10 +17,10 @@ use structopt::StructOpt;
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
-    env_logger::builder()
+    env_logger::Builder::new()
         .filter_level(LevelFilter::Info)
         .format_timestamp(None)
-        .format_module_path(false)
+        // .format_module_path(false)
         .parse_default_env()
         .try_init()?;
 

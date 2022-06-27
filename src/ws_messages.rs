@@ -11,7 +11,7 @@ pub struct SetTextInComponent<'a> {
     pub selections: Vec<RangeInText>,
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone, Copy)]
+#[derive(Debug, Serialize, Deserialize, Clone, Copy, Default)]
 pub struct RangeInText {
     pub start: usize,
     pub end: usize,
