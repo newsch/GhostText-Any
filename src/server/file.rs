@@ -6,6 +6,7 @@ use std::{
 
 use futures::Stream;
 use inotify::{Inotify, WatchMask};
+use log::trace;
 use tokio::fs;
 use tokio_stream::StreamExt;
 

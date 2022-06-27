@@ -9,6 +9,7 @@ use tokio_stream::wrappers::UnboundedReceiverStream;
 
 use futures::FutureExt;
 use futures::{pin_mut, stream::SplitSink, SinkExt, StreamExt};
+use log::{debug, error, info};
 use tempdir::TempDir;
 use warp::{
     ws::{Message, WebSocket},
@@ -21,13 +22,13 @@ mod msg;
 mod systemd;
 mod text;
 
-use crate::options::Options;
+use crate::settings::Settings;
 
 type WebSocketTx = SplitSink<WebSocket, Message>;
 
 #[derive(Debug, Clone)]
 struct State {
-    options: Options,
+    options: Settings,
     single_access: Arc<Semaphore>,
 }
 
@@ -37,7 +38,7 @@ fn with_state<S: Clone + Send>(
     warp::any().map(move || state.clone())
 }
 
-pub async fn run(options: Options) -> anyhow::Result<()> {
+pub async fn run(options: Settings) -> anyhow::Result<()> {
     let state = State {
         options: options.clone(),
         single_access: Arc::new(Semaphore::new(1)),
@@ -116,7 +117,7 @@ pub async fn run(options: Options) -> anyhow::Result<()> {
 }
 
 /// Send initial json redirect info for Ghost Text protocol
-fn redirect_to_websocket(options: Options) -> String {
+fn redirect_to_websocket(options: Settings) -> String {
     serde_json::to_string(&msg::RedirectToWebSocket {
         WebSocketPort: options.port.to_owned(),
         ProtocolVersion: 1,

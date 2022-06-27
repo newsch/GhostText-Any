@@ -1,7 +1,7 @@
 [package]
 authors = ["Evan Lloyd New-Schmidt <evan@new-schmidt.com>"]
 description = "A GhostText server for any $EDITOR"
-edition = "2018"
+edition = "2021"
 license = "MIT"
 name = "ghosttext-any"
 repository = "https://github.com/newsch/ghosttext-any/"
@@ -15,18 +15,18 @@ path = "src/main.rs"
 
 [dependencies]
 anyhow = "1.0.38"
+clap = { version = "3.2.6", features = ["derive", "env"] }
 env_logger = "0.8.2"
 futures = "0.3.12"
 inotify = "0.9.2"
 log = "0.4.14"
-serde = "1.0.123"
-serde_derive = "1.0.123"
+serde = "1.0.137"
+serde_derive = "1.0.137"
 serde_json = "1.0.62"
 shell-words = "1.0.0"
-structopt = "0.3.21"
 tempdir = "0.3.7"
-tokio = { version = "1.2.0", features = ["macros", "rt-multi-thread", "fs", "process", "time"] }
-tokio-stream = { version = "0.1.8", features = ["net"] }
+tokio = { version = "1.19.2", features = ["macros", "rt-multi-thread", "fs", "process", "time"] }
+tokio-stream = { version = "0.1.9", features = ["net"] }
 warp = "0.3.0"
 
 [dev-dependencies]

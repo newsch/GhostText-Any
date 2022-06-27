@@ -1,15 +1,12 @@
-#[macro_use]
-extern crate log;
 use log::LevelFilter;
 
 #[macro_use]
 extern crate serde_derive;
-#[macro_use]
-extern crate structopt;
-use structopt::StructOpt;
 
-mod options;
-use options::Options;
+use clap::Parser;
+
+mod settings;
+use settings::Settings;
 mod server;
 
 #[tokio::main]
@@ -21,7 +18,7 @@ async fn main() -> anyhow::Result<()> {
         .parse_default_env()
         .try_init()?;
 
-    let options = Options::from_args();
+    let options = Settings::parse();
 
     server::run(options).await?;
 

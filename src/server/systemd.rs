@@ -1,5 +1,6 @@
 use std::{env, os::unix};
 
+use log::debug;
 use tokio_stream::wrappers::UnixListenerStream;
 
 /// Try to get a listener socket passed by systemd.

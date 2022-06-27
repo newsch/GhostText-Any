@@ -1,11 +1,13 @@
-#[derive(StructOpt, Clone, Debug)]
-#[structopt(about)]
-pub struct Options {
+use clap::Parser;
+
+#[derive(Parser, Clone, Debug)]
+#[clap(about)]
+pub struct Settings {
     /// Port to listen on
-    #[structopt(short, long, default_value = "4001")]
+    #[clap(short, long, default_value = "4001")]
     pub port: u16,
     /// Host to bind to
-    #[structopt(long, default_value = "127.0.0.1")]
+    #[clap(long, default_value = "127.0.0.1")]
     pub host: String,
     /// Command to run with the received file
     ///
@@ -18,13 +20,13 @@ pub struct Options {
     /// otherwise the filename will be appended to the command.
     /// If %l or %c are present in the command, they will be replaced with the
     /// line and column, respectively, of the browser's cursor.
-    #[structopt(short, long, env)]
+    #[clap(short, long, env)]
     pub editor: String,
     /// Allow multiple concurrent instances of editing command
-    #[structopt(short, long)]
+    #[clap(short, long)]
     pub multi: bool,
     /// Shutdown after <SECONDS> with no connections
-    #[structopt(short, long, name = "SECONDS")]
+    #[clap(short, long, name = "SECONDS")]
     pub idle_timeout: Option<u64>,
     /// Serve on a listening socket passed by systemd
     ///
@@ -34,6 +36,6 @@ pub struct Options {
     /// This expects a socket configured with `Accept=no` and
     /// `ListenStream=<PORT>`.
     /// See `systemd.socket(5)`, `sd_listen_fds(3)`.
-    #[structopt(long)]
+    #[clap(long)]
     pub from_systemd: bool,
 }

@@ -2,16 +2,16 @@ use std::path::PathBuf;
 
 use anyhow::bail;
 use anyhow::Context;
+use log::{debug, error, info};
 use tokio::process::Command;
 
-use crate::options::Options;
-use crate::server::text::utf16_offset_to_utf8_line_col;
-
 use super::msg;
+use super::text::utf16_offset_to_utf8_line_col;
+use super::Settings;
 
 /// Returns on process exit
 pub async fn spawn_editor(
-    options: &Options,
+    options: &Settings,
     file_path: &PathBuf,
     msg: &msg::GetTextFromComponent,
 ) -> anyhow::Result<()> {
