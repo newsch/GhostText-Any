@@ -16,10 +16,9 @@ pub struct Settings {
     /// Once the command completes, the contents of the file will be sent to the
     /// browser, the connection closed, and the file deleted.
     ///
-    /// If %f is present in the command, it will be replaced with the filename,
-    /// otherwise the filename will be appended to the command.
-    /// If %l or %c are present in the command, they will be replaced with the
-    /// line and column, respectively, of the browser's cursor.
+    /// If %f, %l, or %c are present in the command, they will be replaced with
+    /// the filename, cursor line, and cursor column, respectively. If none are
+    /// present, the filename will be appended to the command.
     #[clap(short, long, env)]
     pub editor: String,
     /// Allow multiple concurrent instances of editing command
@@ -33,6 +32,7 @@ pub struct Settings {
     /// If the socket cannot be found or used a failure will be returned.
     /// The `--port` flag must match what systemd is listening on in order to
     /// send a correct ghosttext websocket redirect message.
+    ///
     /// This expects a socket configured with `Accept=no` and
     /// `ListenStream=<PORT>`.
     /// See `systemd.socket(5)`, `sd_listen_fds(3)`.
