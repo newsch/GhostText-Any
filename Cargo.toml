@@ -18,14 +18,14 @@ anyhow = "1.0.38"
 clap = { version = "3.2.6", features = ["derive", "env"] }
 env_logger = "0.8.2"
 futures = "0.3.12"
-inotify = "0.9.2"
 log = "0.4.14"
+notify = "4.0.17"
 serde = "1.0.137"
 serde_derive = "1.0.137"
 serde_json = "1.0.62"
 shell-words = "1.0.0"
 tempdir = "0.3.7"
-tokio = { version = "1.19.2", features = ["macros", "rt-multi-thread", "fs", "process", "time"] }
+tokio = { version = "1.19.2", features = ["macros", "rt-multi-thread", "fs", "process", "time", "rt", "sync"] }
 tokio-stream = { version = "0.1.9", features = ["net"] }
 warp = "0.3.0"
 

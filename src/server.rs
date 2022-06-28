@@ -158,7 +158,7 @@ async fn handle_websocket(state: State, stream: WebSocket) -> anyhow::Result<()>
 
     let rx = rx.fuse();
     let editor = lock_and_spawn(&state, &file_path, &init_message).fuse();
-    let edits = file::watch_edits(&file_path)?.fuse();
+    let edits = file::watch_edits(&file_path).fuse();
     pin_mut!(rx, editor, edits);
 
     loop {
@@ -170,12 +170,9 @@ async fn handle_websocket(state: State, stream: WebSocket) -> anyhow::Result<()>
                 debug!("Editor closed!");
                 break;
             },
-            event = edits.select_next_some() => match event {
-                Ok(_) => {
-                    debug!("File modified");
-                    send_current_file_contents(&mut tx, &file_path, &cursors).await?;
-                },
-                Err(e) => error!("inotify error: {}", e)
+            _edit = edits.select_next_some() => {
+                debug!("File modified");
+                send_current_file_contents(&mut tx, &file_path, &cursors).await?;
             },
             msg = rx.select_next_some() => match msg {
                 Ok(msg) => {
@@ -185,9 +182,7 @@ async fn handle_websocket(state: State, stream: WebSocket) -> anyhow::Result<()>
                         cursors = update_msg.selections.to_owned();
                         file::replace_contents(&file_path, &update_msg)?;
                         // take next edit notification...
-                        if let Err(e) = edits.select_next_some().await {
-                            error!("inotify error after writing: {}", e);
-                        }
+                        edits.select_next_some().await;
                         continue;
                     }
                     debug!("Received non-update msg: {:?}", msg);
