@@ -37,5 +37,6 @@ pub struct Settings {
     /// `ListenStream=<PORT>`.
     /// See `systemd.socket(5)`, `sd_listen_fds(3)`.
     #[clap(long)]
+    #[cfg(all(feature = "systemd", target_os = "linux"))]
     pub from_systemd: bool,
 }

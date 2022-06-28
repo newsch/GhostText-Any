@@ -19,6 +19,7 @@ use warp::{
 mod editor;
 mod file;
 mod msg;
+#[cfg(all(feature = "systemd", target_os = "linux"))]
 mod systemd;
 mod text;
 
@@ -80,37 +81,61 @@ pub async fn run(options: Settings) -> anyhow::Result<()> {
     // since websocket filter is more restrictive match on it first
     let routes = ws_route.or(index);
 
-    let requested_addr = format!("{}:{}", options.host, options.port);
-
-    let mut addrs = (options.host, options.port)
+    let mut addrs = (options.host.as_str(), options.port)
         .to_socket_addrs()
-        .with_context(|| format!("Invalid server address: {}", requested_addr))?;
+        .with_context(|| format!("Invalid server address: {}:{}", options.host, options.port))?;
     let addr = addrs.next().unwrap();
 
     let server = warp::serve(routes);
 
-    if let Some(timeout_sec) = options.idle_timeout {
-        debug!("Idle timeout after {} secs", timeout_sec);
-        let timeout_task = idle_timeout(time::Duration::from_secs(timeout_sec), thread_update_rec);
-
-        if options.from_systemd {
-            let listener_stream = systemd::try_get_socket()?;
-            info!("Listening on systemd socket");
-            server
-                .serve_incoming_with_graceful_shutdown(listener_stream, timeout_task)
-                .await;
-        } else {
+    match options {
+        Settings {
+            idle_timeout: None,
+            #[cfg(all(feature = "systemd", target_os = "linux"))]
+                from_systemd: false,
+            ..
+        } => {
             info!("Listening on http://{}", addr);
+            server.bind(addr).await;
+        }
+        Settings {
+            idle_timeout: Some(timeout_sec),
+            #[cfg(all(feature = "systemd", target_os = "linux"))]
+                from_systemd: false,
+            ..
+        } => {
+            info!("Listening on http://{}", addr);
+            debug!("Idle timeout after {} secs", timeout_sec);
+            let timeout_task =
+                idle_timeout(time::Duration::from_secs(timeout_sec), thread_update_rec);
             let (_addr, serve_task) = server.bind_with_graceful_shutdown(addr, timeout_task);
             serve_task.await;
         }
-    } else if options.from_systemd {
-        let listener_stream = systemd::try_get_socket()?;
-        info!("Listening on systemd socket");
-        server.serve_incoming(listener_stream).await;
-    } else {
-        info!("Listening on http://{}", addr);
-        server.bind(addr).await;
+        #[cfg(all(feature = "systemd", target_os = "linux"))]
+        Settings {
+            idle_timeout: None,
+            from_systemd: true,
+            ..
+        } => {
+            let listener_stream = systemd::try_get_socket()?;
+            info!("Listening on systemd socket");
+            server.serve_incoming(listener_stream).await;
+        }
+        #[cfg(all(feature = "systemd", target_os = "linux"))]
+        Settings {
+            idle_timeout: Some(timeout_sec),
+            from_systemd: true,
+            ..
+        } => {
+            let listener_stream = systemd::try_get_socket()?;
+            info!("Listening on systemd socket");
+            debug!("Idle timeout after {} secs", timeout_sec);
+            let timeout_task =
+                idle_timeout(time::Duration::from_secs(timeout_sec), thread_update_rec);
+            server
+                .serve_incoming_with_graceful_shutdown(listener_stream, timeout_task)
+                .await;
+        }
     }
 
     Ok(())

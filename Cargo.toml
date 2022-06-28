@@ -34,3 +34,5 @@ test-case = "2.1.0"
 test-log = "0.2.8"
 
 [features]
+# listen on socket passed by systemd
+systemd = []
