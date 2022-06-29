@@ -4,6 +4,7 @@ use std::{
     path::{Path, PathBuf},
 };
 
+use log::debug;
 use tokio::fs;
 
 use super::msg;
@@ -18,7 +19,7 @@ pub fn watch_edits(_path: &Path) -> impl futures::Stream<Item = ()> {
 }
 
 pub fn get_new_path(dir: &Path, msg: &msg::GetTextFromComponent) -> io::Result<PathBuf> {
-    let file_name = process_title(&msg.title);
+    let file_name = get_filename(msg);
     let file_path = dir.join(file_name);
     Ok(file_path)
 }
@@ -42,10 +43,12 @@ pub async fn get_current_contents(file_path: &Path) -> io::Result<String> {
     Ok(text)
 }
 
-fn process_title(title: &str) -> String {
+fn get_filename(msg: &msg::GetTextFromComponent) -> String {
     const BAD_CHARS: &[char] = &[' ', '/', '\\', '\r', '\n', '\t'];
 
-    let mut title = title;
+    let extension = determine_file_extension(msg);
+
+    let mut title = msg.title.as_str();
 
     let file_name = if title.is_empty() {
         String::from("buffer")
@@ -56,7 +59,34 @@ fn process_title(title: &str) -> String {
             }
         }
         title.replace(BAD_CHARS, "-")
-    } + ".txt";
+    } + "."
+        + extension;
 
     file_name
+}
+
+fn determine_file_extension(msg: &msg::GetTextFromComponent) -> &str {
+    use url::{Host, Url};
+
+    const MARKDOWN: &str = "md";
+    const PLAINTEXT: &str = "txt";
+    const DEFAULT: &str = PLAINTEXT;
+
+    let source_url = match Url::parse(&msg.url) {
+        Ok(u) => u,
+        Err(e) => {
+            debug!("Error parsing source url {:?}: {e}", msg.url);
+            return DEFAULT;
+        }
+    };
+
+    let domain = match source_url.host() {
+        Some(Host::Domain(d)) => d,
+        _ => return DEFAULT,
+    };
+
+    match &domain.split('.').collect::<Vec<_>>()[..] {
+        [.., "github", "com"] | [.., "gitlab", "com"] | [.., "codeberg", "org"] => MARKDOWN,
+        _ => DEFAULT,
+    }
 }
