@@ -63,7 +63,11 @@ fn perform_substitutions(command: &mut Vec<String>, file_path: &str, line: usize
     const LINE: &str = "%l";
     const COLUMN: &str = "%c";
 
-    if command.iter().skip(1).any(|s| s.contains(FILE) || s.contains(LINE) || s.contains(COLUMN)) {
+    if command
+        .iter()
+        .skip(1)
+        .any(|s| s.contains(FILE) || s.contains(LINE) || s.contains(COLUMN))
+    {
         for s in command.iter_mut().skip(1) {
             replace_in_place(s, FILE, file_path);
             replace_in_place(s, LINE, &line.to_string());

@@ -22,6 +22,8 @@ mod msg;
 #[cfg(all(feature = "systemd", target_os = "linux"))]
 mod systemd;
 mod text;
+#[cfg(feature = "watch_changes")]
+mod watch_changes;
 
 use crate::settings::Settings;
 
@@ -206,8 +208,11 @@ async fn handle_websocket(state: State, stream: WebSocket) -> anyhow::Result<()>
                         debug!("Received update msg");
                         cursors = update_msg.selections.to_owned();
                         file::replace_contents(&file_path, &update_msg)?;
+
                         // take next edit notification...
-                        edits.select_next_some().await;
+                        #[cfg(feature = "watch_changes")]
+                            edits.select_next_some().await;
+
                         continue;
                     }
                     debug!("Received non-update msg: {:?}", msg);
@@ -220,7 +225,11 @@ async fn handle_websocket(state: State, stream: WebSocket) -> anyhow::Result<()>
     // return updated file text
     send_current_file_contents(&mut tx, &file_path, &cursors).await?;
 
-    drop(tempdir); // delete directory/file
+    // close gracefully
+    tx.close().await.context("closing websocket tx handle")?;
+
+    drop(tempdir); // directory/file is deleted
+
     Ok(())
 }
 
