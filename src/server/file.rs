@@ -14,8 +14,8 @@ pub use super::watch_changes::watch_edits;
 
 /// A mock that returns an empty stream
 #[cfg(not(feature = "watch_changes"))]
-pub fn watch_edits(_path: &Path) -> impl futures::Stream<Item = ()> {
-    tokio_stream::empty()
+pub fn watch_edits(_path: &Path) -> anyhow::Result<impl futures::Stream<Item = ()>> {
+    Ok(tokio_stream::empty())
 }
 
 pub fn get_new_path(dir: &Path, msg: &msg::GetTextFromComponent) -> io::Result<PathBuf> {

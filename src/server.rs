@@ -185,7 +185,7 @@ async fn handle_websocket(state: State, stream: WebSocket) -> anyhow::Result<()>
 
     let rx = rx.fuse();
     let editor = lock_and_spawn(&state, &file_path, &init_message).fuse();
-    let edits = file::watch_edits(&file_path).fuse();
+    let edits = file::watch_edits(&file_path).context("watch_edits")?.fuse();
     pin_mut!(rx, editor, edits);
 
     loop {

@@ -1,45 +1,67 @@
 use std::path::Path;
 
-use anyhow::Context;
-use futures::Stream;
-use log::{debug, error, trace};
+use futures::{Stream, StreamExt};
+use log::{debug, trace};
 use tokio::sync::mpsc;
 
 /// Returns a stream of update events for the provided file
-pub fn watch_edits(path: &Path) -> impl Stream<Item = ()> {
-    let path = path.to_owned();
+pub fn watch_edits(path: &Path) -> anyhow::Result<impl Stream<Item = ()>> {
+    use notify::Watcher;
 
-    let (tx, rx) = mpsc::channel(8);
-    let _task = tokio::task::spawn_blocking(move || {
-        if let Err(e) = notify_thread(&path, tx) {
-            error!("Error on notify_thread: {e}");
-        }
-    });
+    let (mut watcher, rx) = async_watcher()?;
 
-    tokio_stream::wrappers::ReceiverStream::new(rx)
+    watcher.watch(path.as_ref(), notify::RecursiveMode::NonRecursive)?;
+
+    let stream = tokio_stream::wrappers::ReceiverStream::new(rx);
+
+    Ok(NotifyWatcherStream {
+        _watcher: watcher,
+        stream,
+    })
 }
 
-/// Blocking loop to read from non-async notify
-fn notify_thread(path: &Path, sender: mpsc::Sender<()>) -> anyhow::Result<()> {
-    use notify::{Op, RawEvent, RecursiveMode, Watcher};
+/// Wrapper to keep watcher alive with event stream handle
+struct NotifyWatcherStream {
+    _watcher: notify::RecommendedWatcher,
+    stream: tokio_stream::wrappers::ReceiverStream<()>,
+}
 
-    let (tx, rx) = std::sync::mpsc::channel();
+impl Stream for NotifyWatcherStream {
+    type Item = ();
 
-    let mut watcher = notify::raw_watcher(tx).context("creating notify watcher")?;
-    watcher.watch(path, RecursiveMode::NonRecursive)?;
-
-    loop {
-        let event = rx.recv().context("recv from notify watcher")?;
-        trace!("New notify event for {path:?}: {event:?}");
-        if let RawEvent { op: Ok(op), .. } = event {
-            if op.contains(Op::WRITE) {
-                if let Err(e) = sender.blocking_send(()) {
-                    debug!("file watcher receiver closed, stopping: {e}");
-                    break;
-                }
-            }
-        }
+    fn poll_next(
+        mut self: std::pin::Pin<&mut Self>,
+        cx: &mut std::task::Context<'_>,
+    ) -> std::task::Poll<Option<Self::Item>> {
+        self.stream.poll_next_unpin(cx)
     }
 
-    Ok(())
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        self.stream.size_hint()
+    }
+}
+
+fn async_watcher() -> notify::Result<(notify::RecommendedWatcher, mpsc::Receiver<()>)> {
+    use notify::{Event, EventKind};
+
+    let (tx, rx) = mpsc::channel(1);
+    let handle = tokio::runtime::Handle::current();
+
+    let watcher = notify::recommended_watcher(move |res| match res {
+        Err(e) => debug!("Notify error: {e}"),
+        Ok(event) => {
+            trace!("New notify event: {event:?}");
+            if let Event {
+                kind: EventKind::Modify(_),
+                ..
+            } = event
+            {
+                handle.block_on(async {
+                    tx.send(()).await.unwrap();
+                })
+            }
+        }
+    })?;
+
+    Ok((watcher, rx))
 }
