@@ -1,7 +1,8 @@
 use clap::Parser;
 
 #[derive(Parser, Clone, Debug)]
-#[clap(about)]
+#[clap(author, about)]
+#[clap(version = option_env!("CARGO_GIT_VERSION").unwrap_or(env!("CARGO_PKG_VERSION")))]
 pub struct Settings {
     /// Port to listen on
     #[clap(short, long, default_value = "4001")]
