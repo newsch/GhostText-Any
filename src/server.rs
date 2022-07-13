@@ -19,8 +19,6 @@ use warp::{
 mod editor;
 mod file;
 mod msg;
-#[cfg(all(feature = "systemd", target_os = "linux"))]
-mod systemd;
 mod text;
 #[cfg(feature = "watch_changes")]
 mod watch_changes;
@@ -119,7 +117,7 @@ pub async fn run(options: Settings) -> anyhow::Result<()> {
             from_systemd: true,
             ..
         } => {
-            let listener_stream = systemd::try_get_socket()?;
+            let listener_stream = super::systemd::try_get_socket()?;
             info!("Listening on systemd socket");
             server.serve_incoming(listener_stream).await;
         }
@@ -129,7 +127,7 @@ pub async fn run(options: Settings) -> anyhow::Result<()> {
             from_systemd: true,
             ..
         } => {
-            let listener_stream = systemd::try_get_socket()?;
+            let listener_stream = super::systemd::try_get_socket()?;
             info!("Listening on systemd socket");
             debug!("Idle timeout after {} secs", timeout_sec);
             let timeout_task =

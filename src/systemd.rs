@@ -1,6 +1,7 @@
 use std::{env, os::unix};
 
-use log::debug;
+use log::{debug, LevelFilter, Log, Metadata, Record};
+use systemd_journal_logger::{connected_to_journal, JournalLog};
 use tokio_stream::wrappers::UnixListenerStream;
 
 /// Try to get a listener socket passed by systemd.
@@ -42,4 +43,52 @@ pub fn try_get_socket() -> anyhow::Result<UnixListenerStream> {
     env::remove_var(LISTEN_FDS);
 
     Ok(listener_stream)
+}
+
+struct SystemdEnvLogger {
+    filter: env_logger::filter::Filter,
+    inner: JournalLog<&'static str, &'static str>,
+}
+
+impl SystemdEnvLogger {
+    fn new() -> Self {
+        use env_logger::filter::Builder;
+
+        let filter = Builder::new()
+            .filter_level(LevelFilter::Info)
+            .parse(&env::var(env_logger::DEFAULT_FILTER_ENV).unwrap_or_default())
+            .build();
+
+        let inner = JournalLog::with_extra_fields(vec![("VERSION", crate::version())]);
+
+        log::set_max_level(filter.filter());
+
+        Self { filter, inner }
+    }
+}
+
+impl Log for SystemdEnvLogger {
+    fn enabled(&self, metadata: &Metadata) -> bool {
+        self.filter.enabled(metadata)
+    }
+
+    fn log(&self, record: &Record) {
+        if self.filter.matches(record) {
+            self.inner.log(record);
+        }
+    }
+
+    fn flush(&self) {
+        self.inner.flush();
+    }
+}
+
+pub fn should_init_systemd_logger() -> bool {
+    connected_to_journal()
+}
+
+pub fn init_systemd_logger() -> anyhow::Result<()> {
+    log::set_boxed_logger(Box::new(SystemdEnvLogger::new()))?;
+
+    Ok(())
 }

@@ -24,6 +24,7 @@ serde = "1.0.137"
 serde_derive = "1.0.137"
 serde_json = "1.0.62"
 shell-words = "1.0.0"
+systemd-journal-logger = { version = "0.5.0", optional = true }
 tempdir = "0.3.7"
 tokio = { version = "1.19.2", features = ["macros", "rt-multi-thread", "fs", "process", "time", "rt", "sync"] }
 tokio-stream = { version = "0.1.9", features = ["net"] }
@@ -40,4 +41,4 @@ default = ["watch_changes"]
 # may not work well on all platforms
 watch_changes = ["dep:notify"]
 # listen on socket passed by systemd
-systemd = []
+systemd = ["dep:systemd-journal-logger"]

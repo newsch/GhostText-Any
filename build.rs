@@ -4,10 +4,7 @@ use std::process::Command;
 ///
 /// NOTE: Cargo.toml still needs to be updated on releases
 fn set_version_from_git() {
-    let cmd = Command::new("git")
-        .arg("describe")
-        .arg("--dirty")
-        .output();
+    let cmd = Command::new("git").arg("describe").arg("--dirty").output();
 
     match cmd {
         Ok(output) if output.status.success() => {
