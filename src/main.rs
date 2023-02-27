@@ -1,7 +1,9 @@
-use log::LevelFilter;
-
 #[macro_use]
 extern crate serde_derive;
+
+#[macro_use]
+extern crate log;
+use log::LevelFilter;
 
 use clap::Parser;
 
@@ -10,6 +12,7 @@ use settings::Settings;
 mod server;
 #[cfg(all(feature = "systemd", target_os = "linux"))]
 mod systemd;
+mod utils;
 
 fn version() -> &'static str {
     option_env!("CARGO_GIT_VERSION")

@@ -28,6 +28,11 @@ pub struct Settings {
     /// Shutdown after <SECONDS> with no connections
     #[clap(short, long, name = "SECONDS")]
     pub idle_timeout: Option<u64>,
+    /// Buffer incoming changes for <MILLISECONDS> before updating the local file.
+    ///
+    /// May conflict with $EDITOR's internal debouncing. Set to 0 to disable.
+    #[clap(long, name = "MILLIS", default_value = "500")]
+    pub delay: u64,
     /// Serve on a listening socket passed by systemd
     ///
     /// If the socket cannot be found or used a failure will be returned.

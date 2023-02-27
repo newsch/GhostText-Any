@@ -3,7 +3,7 @@ use std::{net::ToSocketAddrs, path::Path, sync::Arc};
 use anyhow::{bail, Context};
 use tokio::{
     sync::{mpsc, Semaphore},
-    time,
+    time::{self, Duration},
 };
 use tokio_stream::wrappers::UnboundedReceiverStream;
 
@@ -24,6 +24,7 @@ mod text;
 mod watch_changes;
 
 use crate::settings::Settings;
+use crate::utils::MyStreamExt;
 
 type WebSocketTx = SplitSink<WebSocket, Message>;
 
@@ -181,7 +182,22 @@ async fn handle_websocket(state: State, stream: WebSocket) -> anyhow::Result<()>
     //   - ignore cursor updates
     //   - respond to pings?
 
-    let rx = rx.fuse();
+    let rx = {
+        let msg_delay = Duration::from_millis(state.options.delay);
+
+        // async closures not stable
+        async fn ws_error(m: Result<Message, warp::Error>) -> Option<Message> {
+            m.map(|m| {
+                trace!("Received websocket msg: {:?}", m);
+                m
+            })
+            .map_err(|e| error!("Websocket error: {}", e))
+            .ok()
+        }
+
+        rx.filter_map(ws_error).debounce(msg_delay).fuse()
+    };
+
     let editor = lock_and_spawn(&state, &file_path, &init_message).fuse();
     let edits = file::watch_edits(&file_path).context("watch_edits")?.fuse();
     pin_mut!(rx, editor, edits);
@@ -199,24 +215,20 @@ async fn handle_websocket(state: State, stream: WebSocket) -> anyhow::Result<()>
                 debug!("File modified");
                 send_current_file_contents(&mut tx, &file_path, &cursors).await?;
             },
-            msg = rx.select_next_some() => match msg {
-                Ok(msg) => {
-                    if msg.is_text() {
-                        let update_msg: msg::GetTextFromComponent = serde_json::from_str(msg.to_str().expect("Is a text msg")).context("Could not parse websocket message")?;
-                        debug!("Received update msg");
-                        cursors = update_msg.selections.to_owned();
-                        file::replace_contents(&file_path, &update_msg)?;
-
-                        // take next edit notification...
-                        #[cfg(feature = "watch_changes")]
-                            edits.select_next_some().await;
-
+            msg = rx.select_next_some() => {
+                    if !msg.is_text() {
+                        error!("Received non-update msg: {:?}", msg);
                         continue;
                     }
-                    debug!("Received non-update msg: {:?}", msg);
-                },
-                Err(e) => error!("Websocket error: {}", e),
-        },
+                    let update_msg: msg::GetTextFromComponent = serde_json::from_str(msg.to_str().expect("Is a text msg")).context("Could not parse websocket message")?;
+                    debug!("Handling update msg");
+                    cursors = update_msg.selections.to_owned();
+                    file::replace_contents(&file_path, &update_msg)?;
+
+                    // take next edit notification...
+                    #[cfg(feature = "watch_changes")]
+                        edits.select_next_some().await;
+            },
         }
     }
 
