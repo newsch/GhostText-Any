@@ -1,6 +1,6 @@
 use std::{env, os::unix};
 
-use log::{debug, LevelFilter, Log, Metadata, Record};
+use log::{LevelFilter, Log, Metadata, Record};
 use systemd_journal_logger::{connected_to_journal, JournalLog};
 use tokio_stream::wrappers::UnixListenerStream;
 

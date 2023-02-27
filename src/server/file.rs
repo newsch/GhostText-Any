@@ -4,7 +4,6 @@ use std::{
     path::{Path, PathBuf},
 };
 
-use log::debug;
 use tokio::fs;
 
 use super::msg;

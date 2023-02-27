@@ -9,7 +9,6 @@ use tokio_stream::wrappers::UnboundedReceiverStream;
 
 use futures::FutureExt;
 use futures::{pin_mut, stream::SplitSink, SinkExt, StreamExt};
-use log::{debug, error, info};
 use tempdir::TempDir;
 use warp::{
     ws::{Message, WebSocket},

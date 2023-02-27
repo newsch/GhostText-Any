@@ -1,7 +1,6 @@
 use std::path::Path;
 
 use futures::{Stream, StreamExt};
-use log::{debug, trace};
 use tokio::sync::mpsc;
 
 /// Returns a stream of update events for the provided file

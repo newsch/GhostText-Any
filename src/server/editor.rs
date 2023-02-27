@@ -2,7 +2,6 @@ use std::path::Path;
 
 use anyhow::bail;
 use anyhow::Context;
-use log::{debug, error, info};
 use tokio::process::Command;
 
 use super::msg;

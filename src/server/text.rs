@@ -1,5 +1,3 @@
-use log::trace;
-
 /// Convert the browser's 0-based UTF-16 offset to 1-based UTF-8 line/col cursor coordinates
 pub fn utf16_offset_to_utf8_line_col(offset: usize, text: &str) -> (usize, usize) {
     // re-encode text as UTF-16
