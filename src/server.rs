@@ -3,7 +3,7 @@ use std::{net::ToSocketAddrs, path::Path, sync::Arc};
 use anyhow::{bail, Context};
 use tokio::{
     sync::{mpsc, Semaphore},
-    time::{self, Duration},
+    time::{self, timeout, Duration},
 };
 use tokio_stream::wrappers::UnboundedReceiverStream;
 
@@ -179,6 +179,8 @@ async fn handle_websocket(state: State, stream: WebSocket) -> anyhow::Result<()>
     //   - ignore cursor updates
     //   - respond to pings?
 
+    const EDIT_DELAY_MS: u64 = 200;
+
     let rx = {
         let msg_delay = Duration::from_millis(state.options.delay);
 
@@ -192,11 +194,18 @@ async fn handle_websocket(state: State, stream: WebSocket) -> anyhow::Result<()>
             .ok()
         }
 
-        rx.filter_map(ws_error).debounce(msg_delay).fuse()
+        rx.filter_map(ws_error)
+            .debounce(msg_delay)
+            .inspect(|m| debug!("Debounced websocket msg: {m:?}"))
+            .fuse()
     };
 
     let editor = lock_and_spawn(&state, &file_path, &init_message).fuse();
-    let edits = watch_edits(&file_path).context("watch_edits")?.fuse();
+    let edits = watch_edits(&file_path)
+        .context("watch_edits")?
+        .debounce(Duration::from_millis(EDIT_DELAY_MS))
+        .inspect(|e| debug!("Debounced notify event: {e:?}"))
+        .fuse();
     pin_mut!(rx, editor, edits);
 
     loop {
@@ -213,22 +222,24 @@ async fn handle_websocket(state: State, stream: WebSocket) -> anyhow::Result<()>
                 send_current_file_contents(&mut tx, &mut file, &cursors).await?;
             },
             msg = rx.select_next_some() => {
-                    if !msg.is_text() {
-                        error!("Received non-update msg: {:?}", msg);
-                        continue;
-                    }
-                    let update_msg: msg::GetTextFromComponent = serde_json::from_str(
-                        msg.to_str().expect("Is a text msg")).context("Could not parse websocket message")?;
-                    debug!("Handling update msg");
-                    cursors = update_msg.selections.to_owned();
-                    let did_write = file.maybe_update(&update_msg).await?;
+                if !msg.is_text() {
+                    error!("Received non-update msg: {:?}", msg);
+                    continue;
+                }
+                let update_msg: msg::GetTextFromComponent = serde_json::from_str(
+                    msg.to_str().expect("Is a text msg")).context("Could not parse websocket message")?;
+                debug!("Handling update msg");
+                cursors = update_msg.selections.to_owned();
+                let did_write = file.maybe_update(&update_msg).await?;
 
-                    #[cfg(feature = "watch_changes")]
-                    if did_write {
-                            debug!("Waiting for next edit notification");
-                            edits.select_next_some().await;
-                            debug!("Got next edit notification");
+                #[cfg(feature = "watch_changes")]
+                if did_write {
+                    debug!("Ignoring next edit notification");
+                    match timeout(Duration::from_millis(EDIT_DELAY_MS / 2 * 3), edits.select_next_some()).await {
+                        Ok(_) => debug!("Got next edit notification"),
+                        Err(_) => warn!("Timed out waiting for next edit notification"),
                     }
+                }
             },
         }
     }
