@@ -4,7 +4,8 @@ use futures::{Stream, StreamExt};
 use tokio::sync::mpsc;
 
 /// Returns a stream of update events for the provided file
-pub fn watch_edits(path: &Path) -> anyhow::Result<impl Stream<Item = ()>> {
+pub fn watch_edits(path: impl AsRef<Path>) -> anyhow::Result<impl Stream<Item = ()>> {
+    let path = path.as_ref();
     use notify::Watcher;
 
     let (mut watcher, rx) = async_watcher()?;

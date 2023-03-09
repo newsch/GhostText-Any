@@ -9,7 +9,6 @@ use tokio_stream::wrappers::UnboundedReceiverStream;
 
 use futures::FutureExt;
 use futures::{pin_mut, stream::SplitSink, SinkExt, StreamExt};
-use tempdir::TempDir;
 use warp::{
     ws::{Message, WebSocket},
     Filter,
@@ -17,6 +16,7 @@ use warp::{
 
 mod editor;
 mod file;
+use file::{watch_edits, LocalFile};
 mod msg;
 mod text;
 #[cfg(feature = "watch_changes")]
@@ -168,10 +168,8 @@ async fn handle_websocket(state: State, stream: WebSocket) -> anyhow::Result<()>
     let mut cursors = init_message.selections.clone();
 
     // create file
-    let tempdir = TempDir::new("ghost-text")?;
-    let file_path = file::get_new_path(tempdir.path(), &init_message)?;
-    debug!("Creating file at: {:?}", file_path);
-    file::replace_contents(&file_path, &init_message)?;
+    let mut file = LocalFile::create(&init_message).await?;
+    let file_path = file.as_ref().to_owned();
 
     // moar futures:
     // - pass off to editor, wait for exit
@@ -198,7 +196,7 @@ async fn handle_websocket(state: State, stream: WebSocket) -> anyhow::Result<()>
     };
 
     let editor = lock_and_spawn(&state, &file_path, &init_message).fuse();
-    let edits = file::watch_edits(&file_path).context("watch_edits")?.fuse();
+    let edits = watch_edits(&file_path).context("watch_edits")?.fuse();
     pin_mut!(rx, editor, edits);
 
     loop {
@@ -212,32 +210,34 @@ async fn handle_websocket(state: State, stream: WebSocket) -> anyhow::Result<()>
             },
             _edit = edits.select_next_some() => {
                 debug!("File modified");
-                send_current_file_contents(&mut tx, &file_path, &cursors).await?;
+                send_current_file_contents(&mut tx, &mut file, &cursors).await?;
             },
             msg = rx.select_next_some() => {
                     if !msg.is_text() {
                         error!("Received non-update msg: {:?}", msg);
                         continue;
                     }
-                    let update_msg: msg::GetTextFromComponent = serde_json::from_str(msg.to_str().expect("Is a text msg")).context("Could not parse websocket message")?;
+                    let update_msg: msg::GetTextFromComponent = serde_json::from_str(
+                        msg.to_str().expect("Is a text msg")).context("Could not parse websocket message")?;
                     debug!("Handling update msg");
                     cursors = update_msg.selections.to_owned();
-                    file::replace_contents(&file_path, &update_msg)?;
+                    let did_write = file.maybe_update(&update_msg).await?;
 
-                    // take next edit notification...
                     #[cfg(feature = "watch_changes")]
-                        edits.select_next_some().await;
+                    if did_write {
+                            debug!("Waiting for next edit notification");
+                            edits.select_next_some().await;
+                            debug!("Got next edit notification");
+                    }
             },
         }
     }
 
     // return updated file text
-    send_current_file_contents(&mut tx, &file_path, &cursors).await?;
+    send_current_file_contents(&mut tx, &mut file, &cursors).await?;
 
     // close gracefully
     tx.close().await.context("closing websocket tx handle")?;
-
-    drop(tempdir); // directory/file is deleted
 
     Ok(())
 }
@@ -245,7 +245,7 @@ async fn handle_websocket(state: State, stream: WebSocket) -> anyhow::Result<()>
 /// Acquire a global lock if configured and start the editor process
 async fn lock_and_spawn(
     state: &State,
-    file_path: &Path,
+    file_path: impl AsRef<Path>,
     msg: &msg::GetTextFromComponent,
 ) -> anyhow::Result<()> {
     let lock = if !state.options.multi {
@@ -254,7 +254,7 @@ async fn lock_and_spawn(
         None
     };
 
-    editor::spawn_editor(&state.options, file_path, msg).await?;
+    editor::spawn_editor(&state.options, file_path.as_ref(), msg).await?;
 
     // the editor has either failed or finished, so allow another process to spawn
     drop(lock);
@@ -264,15 +264,16 @@ async fn lock_and_spawn(
 
 async fn send_current_file_contents(
     stream: &mut WebSocketTx,
-    file_path: &Path,
+    file: &mut file::LocalFile,
     cursors: &[msg::RangeInText],
 ) -> anyhow::Result<()> {
-    let text = file::get_current_contents(file_path).await?;
+    let text = file.get_current_contents().await?;
 
+    debug!("Sending update msg");
     stream
         .send(Message::text(serde_json::to_string(
             &msg::SetTextInComponent {
-                text: text.as_ref(),
+                text: &text,
                 selections: cursors.to_owned(),
             },
         )?))
