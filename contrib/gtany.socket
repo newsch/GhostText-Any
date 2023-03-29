@@ -1,0 +1,9 @@
+[Unit]
+Description=GhostText local socket
+
+[Socket]
+Accept=no
+ListenStream=4001
+
+[Install]
+RequiredBy=gtany.service

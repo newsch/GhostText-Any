@@ -1,0 +1,24 @@
+[Unit]
+Description=gtany (socket activated)
+
+[Service]
+NonBlocking=false
+KillMode=process
+# Use this to set the log level
+# Environment=RUST_LOG=gtany=debug
+ExecStart=%h/.cargo/bin/gtany \
+    --from-systemd \
+    --idle-timeout 30 \
+    --multi \
+    # Update this to call your preferred editor.
+    # 
+    # If your editor is terminal-based (like ed or vim), you'll want to use a
+    # command that opens it in a new terminal window, like `gnome-terminal`.
+    # NOTE: if you want to use the %f, %c, %l, etc. expansions, you need to
+    # escape them with `%%` (see `man systemd.unit`, "SPECIFIERS")
+    # 
+    # For example:
+    # --editor 'codium --wait --goto %%f:%%l:%%c'
+    # 
+    # Or spawn a terminal emulator with your $EDITOR:
+    --editor 'x-terminal-emulator -e ed -v'
