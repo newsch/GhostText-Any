@@ -1,6 +1,8 @@
 # Changelog
 
 ## Unreleased
+
+## v0.2.0 - 2023-03-29
 - Add `--idle-timeout` flag to shut down after a specified time with no connections
 - Add `--from-systemd` flag for systemd socket activation support (linux only, enabled w/ `systemd` feature)
 - Support systemd journal logging with [`systemd_journal_logger`](https://docs.rs/systemd-journal-logger)
