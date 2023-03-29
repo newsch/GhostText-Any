@@ -28,7 +28,7 @@ pub struct Settings {
     /// Shutdown after <SECONDS> with no connections
     #[clap(short, long, name = "SECONDS")]
     pub idle_timeout: Option<u64>,
-    /// Buffer incoming changes for <MILLISECONDS> before updating the local file.
+    /// Wait until <MILLIS> have passed with no new changes before updating the local file.
     ///
     /// May conflict with $EDITOR's internal debouncing. Set to 0 to disable.
     #[clap(long, name = "MILLIS", default_value = "500")]
