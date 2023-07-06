@@ -148,23 +148,26 @@ fn get_filename(msg: &msg::GetTextFromComponent) -> String {
 }
 
 fn determine_file_extension(msg: &msg::GetTextFromComponent) -> &str {
-    use url::{Host, Url};
-
+    use url::{ParseError::RelativeUrlWithoutBase, Url};
     const MARKDOWN: &str = "md";
     const PLAINTEXT: &str = "txt";
     const DEFAULT: &str = PLAINTEXT;
 
-    let source_url = match Url::parse(&msg.url) {
-        Ok(u) => u,
+    let url = Url::parse(&msg.url);
+
+    let domain = match url {
+        Ok(ref url) => match url.host_str() {
+            Some(domain) => domain,
+            None => return DEFAULT,
+        },
+        // extension only sends the domain without scheme or path
+        // See <https://github.com/fregante/GhostText/issues/212>
+        // and <https://github.com/fregante/GhostText/blob/main/source/ghost-text.js#L160>
+        Err(RelativeUrlWithoutBase) => &msg.url,
         Err(e) => {
-            debug!("Error parsing source url {:?}: {e}", msg.url);
+            warn!("Unable to parse url {:?}: {}", &msg.url, e);
             return DEFAULT;
         }
-    };
-
-    let domain = match source_url.host() {
-        Some(Host::Domain(d)) => d,
-        _ => return DEFAULT,
     };
 
     match &domain.split('.').collect::<Vec<_>>()[..] {

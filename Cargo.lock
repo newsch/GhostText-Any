@@ -371,7 +371,7 @@ dependencies = [
 
 [[package]]
 name = "ghosttext-any"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "anyhow",
  "clap",
@@ -391,7 +391,6 @@ dependencies = [
  "test-log",
  "tokio",
  "tokio-stream",
- "url",
  "warp",
 ]
 
