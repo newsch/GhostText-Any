@@ -106,7 +106,7 @@ fn format_known_editors(editor: &str, file: &str, line: usize, col: usize) -> Op
         "emacs" | "emacsclient" | "gedit" | "kak" => vec![f!("+{line}:{col}"), file.to_string()],
         "nano" => vec![f!("+{line},{col}"), file.to_string()],
         "joe" | "ee" => vec![f!("+{line}"), file.to_string()],
-        "code" | "code-oss" => vec![
+        "code" | "code-oss" | "codium" => vec![
             "--goto".to_string(),
             f!("{file}:{line}:{col}"),
             "--wait".to_string(),
