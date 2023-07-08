@@ -99,6 +99,7 @@ fn replace_in_place(source: &mut String, pattern: &str, replacement: &str) -> bo
 ///
 /// Based on fish-shell's edit_command_buffer function, see <https://github.com/fish-shell/fish-shell/blob/3.5.0/share/functions/edit_command_buffer.fish#L45=>.
 fn format_known_editors(editor: &str, file: &str, line: usize, col: usize) -> Option<Vec<String>> {
+    // TODO: figure out which wants utf8 code unit column vs graphemes/terminal cell column
     use std::format as f;
     Some(match editor {
         "vi" | "vim" | "nvim" => vec![f!("+{line}"), f!("+norm! {col}|"), file.to_string()],
