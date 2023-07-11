@@ -9,7 +9,10 @@ use tokio_stream::wrappers::UnboundedReceiverStream;
 
 use futures::FutureExt;
 use futures::{pin_mut, stream::SplitSink, SinkExt, StreamExt};
+use url::Url;
 use warp::{
+    http::HeaderValue,
+    reject::reject,
     ws::{Message, WebSocket},
     Filter,
 };
@@ -39,6 +42,38 @@ fn with_state<S: Clone + Send>(
     warp::any().map(move || state.clone())
 }
 
+/// Ensures the request Origin header is set to an extension uri.
+///
+/// If a Websocket request is sent by a browser, the origin will be set to:
+/// - `null`
+/// - the url of the initiating webpage
+/// - some form of `*-extension://*` if initiated by an extension
+///
+/// Restricting it to extensions prevents random websites from trying to exfiltrate or exploit.
+/// See: <https://christian-schneider.net/CrossSiteWebSocketHijacking.html>.
+fn is_extension_origin() -> impl Filter<Extract = (), Error = warp::reject::Rejection> + Copy {
+    warp::header::value("origin")
+        .and_then(|origin: HeaderValue| async move {
+            // Verify websocket is from extension context
+            let origin = origin.to_str().map_err(|e| {
+                warn!("Rejecting request from non-string origin: {origin:?}: {e}");
+                reject()
+            })?;
+            let origin = Url::parse(origin).map_err(|e| {
+                warn!("Rejecting request from unparseable origin: {origin:?}: {e}");
+                reject()
+            })?;
+
+            if !origin.scheme().ends_with("extension") {
+                warn!("Rejecting request from non-extension origin: {origin:?}");
+                return Err(reject());
+            }
+
+            Ok(())
+        })
+        .untuple_one()
+}
+
 pub async fn run(options: Settings) -> anyhow::Result<()> {
     let state = State {
         options: options.clone(),
@@ -48,6 +83,7 @@ pub async fn run(options: Settings) -> anyhow::Result<()> {
     let (thread_update_snd, thread_update_rec) = mpsc::unbounded_channel::<ThreadStatus>();
 
     let ws_route = warp::path::end()
+        .and(is_extension_origin())
         .and(with_state(state.clone()))
         // The `ws()` filter will prepare the Websocket handshake.
         .and(warp::ws())
@@ -79,7 +115,9 @@ pub async fn run(options: Settings) -> anyhow::Result<()> {
         .map(redirect_to_websocket);
 
     // since websocket filter is more restrictive match on it first
-    let routes = ws_route.or(index);
+    let routes = ws_route
+        .or(index)
+        .with(warp::log::log("gtany::server::request"));
 
     let mut addrs = (options.host.as_str(), options.port)
         .to_socket_addrs()
