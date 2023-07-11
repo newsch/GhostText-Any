@@ -5,7 +5,7 @@ use std::{
 
 use futures::{ready, stream::Fuse, Future, Stream, StreamExt};
 use pin_project::pin_project;
-use tokio::time::{Duration, Instant, Sleep, sleep_until};
+use tokio::time::{sleep_until, Duration, Instant, Sleep};
 
 pub trait MyStreamExt: Stream + Sized {
     /// Returns the latest item after `wait` has elapsed with no new items, dropping intermediate ones.
@@ -93,9 +93,7 @@ mod test {
     #[tokio::test]
     async fn test_debounce() {
         let s = stream::iter(1..=2)
-            .chain(
-                stream::iter(3..=5)
-                    .throttle(Duration::from_millis(150)))
+            .chain(stream::iter(3..=5).throttle(Duration::from_millis(150)))
             .debounce(Duration::from_millis(100));
         tokio::pin!(s);
         assert_eq!(vec![3, 4, 5], s.collect::<Vec<_>>().await);
@@ -103,16 +101,14 @@ mod test {
 
     #[tokio::test]
     async fn test_debounce_zero_returns_all() {
-        let s = stream::iter(1..=5)
-            .debounce(Duration::default());
+        let s = stream::iter(1..=5).debounce(Duration::default());
         tokio::pin!(s);
         assert_eq!(vec![1, 2, 3, 4, 5], s.collect::<Vec<_>>().await);
     }
 
     #[tokio::test]
     async fn test_debounce_returns_last() {
-        let s = stream::iter(1..=5)
-            .debounce(Duration::from_millis(50));
+        let s = stream::iter(1..=5).debounce(Duration::from_millis(50));
         tokio::pin!(s);
         assert_eq!(vec![5], s.collect::<Vec<_>>().await);
     }

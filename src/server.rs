@@ -25,8 +25,8 @@ mod text;
 #[cfg(feature = "watch_changes")]
 mod watch_changes;
 
+use crate::debounce::MyStreamExt;
 use crate::settings::Settings;
-use crate::utils::MyStreamExt;
 
 type WebSocketTx = SplitSink<WebSocket, Message>;
 

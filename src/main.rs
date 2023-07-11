@@ -9,10 +9,10 @@ use clap::Parser;
 
 mod settings;
 use settings::Settings;
+mod debounce;
 mod server;
 #[cfg(all(feature = "systemd", target_os = "linux"))]
 mod systemd;
-mod utils;
 
 fn version() -> &'static str {
     option_env!("CARGO_GIT_VERSION")
