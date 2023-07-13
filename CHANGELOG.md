@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+## v0.2.1 - 2023-07-12
+
+- Reject websocket requests from non-extension origins
+- Fix syntax detection from urls
+- Add cursor handling for VSCodium
+- Update dependencies
+
 ## v0.2.0 - 2023-03-29
 - Add `--idle-timeout` flag to shut down after a specified time with no connections
 - Add `--from-systemd` flag for systemd socket activation support (linux only, enabled w/ `systemd` feature)
